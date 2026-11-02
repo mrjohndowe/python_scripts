@@ -9,6 +9,8 @@ from PySide6.QtGui import QAction
 
 APP_NAME = "Adult Video Sidebar Desktop"
 SITES = [
+    ("SpecialLinks", "https://mrjohndowe.com/.specialLinks/"),
+    ("RedTube", "https://www.redtube.com/"),
     ("Pornhub", "https://www.pornhub.com/"),
     ("XVideos", "https://www.xvideos.com/"),
     ("XFree", "https://www.xfree.com/"),
