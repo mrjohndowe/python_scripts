@@ -1,0 +1,40 @@
+
+{
+    "face_detection": true,
+    "private_detection": true,
+    "private_model": "models/private_regions.pt",
+    "private_class_ids": [],
+    "confidence": 0.35,
+    "detect_every_n_frames": 2,
+
+    "overlay": {
+        "face": {
+            "type": "blur",
+            "emoji": "😎",
+            "image": "",
+            "strength": 31,
+            "padding": 0.15,
+            "opacity": 1.0,
+            "scale": 1.0,
+            "color": [0, 0, 0]
+        },
+
+        "private": {
+            "type": "emoji",
+            "emoji": "🍑",
+            "image": "",
+            "strength": 31,
+            "padding": 0.15,
+            "opacity": 1.0,
+            "scale": 1.0,
+            "color": [0, 0, 0]
+        }
+    },
+
+    "encoding": {
+        "codec": "libx264",
+        "crf": 20,
+        "preset": "medium",
+        "audio": "copy"
+    }
+}
