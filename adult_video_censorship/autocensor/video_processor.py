@@ -113,7 +113,8 @@ class VideoProcessor:
         private_detector: Any,
         preview_mode: bool = False,
         export_detections: bool = False,
-        frame_skip: int = 0
+        frame_skip: int = 0,
+        progress_callback: callable | None = None
     ) -> Path:
         """Process a video with censorship overlays.
 
@@ -124,6 +125,7 @@ class VideoProcessor:
             preview_mode: If True, skip encoding and return intermediate.
             export_detections: If True, export detection boxes to JSON.
             frame_skip: Number of frames to skip (0 = process all).
+            progress_callback: Optional callback function(current, total, faces, private).
 
         Returns:
             Path to output video.
@@ -179,9 +181,9 @@ class VideoProcessor:
         logger.info(f"Decoded frame: {frame_width} x {frame_height}")
         logger.info(f"FPS: {fps:.2f}, Duration: {duration:.2f}s")
 
-        # Progress bar
+        # Progress bar (only show if no callback provided)
         total_frames = int(duration * fps)
-        pbar = tqdm(total=total_frames, desc="Processing frames", unit="frames")
+        pbar = tqdm(total=total_frames, desc="Processing frames", unit="frames", disable=progress_callback is not None)
 
         try:
             frame = first_frame
@@ -223,6 +225,10 @@ class VideoProcessor:
                             "faces": face_boxes,
                             "private_regions": private_boxes
                         })
+
+                    # Call progress callback if provided
+                    if progress_callback:
+                        progress_callback(frame_count, total_frames, len(face_boxes), len(private_boxes))
 
                 # Apply overlays
                 from autocensor.overlays import apply_overlay

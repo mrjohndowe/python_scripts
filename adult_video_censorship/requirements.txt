@@ -1,8 +1,11 @@
 opencv-python==4.10.0.84
-mediapipe==0.10.21
-Pillow==11.0.0
+mediapipe==0.10.35
+Pillow>=10.0.0
 ultralytics==8.3.40
 nudenet==3.4.2
 tqdm==4.67.1
 pytest==8.3.4
 pytest-cov==6.0.0
+customtkinter==5.2.1
+imageio==2.35.1
+imageio-ffmpeg==0.5.1

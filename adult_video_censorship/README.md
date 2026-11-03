@@ -14,6 +14,8 @@ Advanced video censorship utility for Windows with modular architecture, batch p
 - **Audio Preservation**: Copies audio from original video
 
 ### New Features (v2.0)
+- **Modern GUI**: CustomTkinter-based graphical user interface with dark theme
+- **Video Preview**: Built-in video player with playback controls
 - **Batch Processing**: Process multiple videos in one session
 - **Preview Mode**: Test detections quickly without full encoding
 - **Progress Bars**: Real-time progress indication with tqdm
@@ -35,6 +37,11 @@ Advanced video censorship utility for Windows with modular architecture, batch p
 - Python 3.14, 64-bit
 - FFmpeg and FFprobe
 - MediaPipe face detection model
+
+### Additional Requirements for GUI Mode
+
+- CustomTkinter (included in requirements.txt)
+- imageio (for video preview in GUI)
 
 ## Installation
 
@@ -86,18 +93,53 @@ Invoke-WebRequest `
 
 ## Running the Application
 
+You can run AutoCensorVideo in two modes:
+
+### GUI Mode (Recommended)
+
+Launch the modern graphical user interface:
+
+```powershell
+python .\run_gui.py
+```
+
+The GUI features:
+- **Video Preview**: Built-in video player with playback controls
+- **Configuration Editor**: Real-time configuration editing with sliders
+- **Detection Statistics**: Live display of detection counts and confidence
+- **Progress Visualization**: Real-time progress bar during processing
+- **File Browser**: Easy video selection
+- **Profile Management**: Save and load configuration profiles
+- **Dark Theme**: Modern, professional appearance
+
+### CLI Mode
+
+For command-line usage:
+
 ```powershell
 python .\run.py
 ```
 
 ### Processing Modes
 
-When you run the application, you'll see a mode selection menu:
+When you run the CLI application, you'll see a mode selection menu:
 
 1. **Single Video**: Process one video at a time
 2. **Batch Processing**: Select and process multiple videos sequentially
 3. **Preview Mode**: Process a sample of the video quickly to test detections
 4. **Configuration Only**: Modify, save, or load configuration profiles
+
+### GUI Mode Features
+
+The GUI provides a modern, user-friendly interface:
+
+- **Sidebar**: Quick access to file selection, batch processing, and profiles
+- **Video Preview**: Built-in video player with play/pause and frame scrubbing
+- **Detection Statistics**: Real-time display of faces and private regions detected
+- **Configuration Editor**: Interactive sliders for overlay settings
+- **Progress Bar**: Visual progress indication during processing
+- **Profile Management**: Load and save configuration profiles
+- **Dark Theme**: Modern, professional appearance with CustomTkinter
 
 ### Output
 
@@ -452,6 +494,7 @@ adult_video_censorship/
 │   ├── overlays.py      # Overlay rendering functions
 │   ├── video_processor.py # Video processing with FFmpeg
 │   ├── ui.py            # User interface functions
+│   ├── gui.py           # Modern CustomTkinter GUI
 │   └── main.py          # Main application entry point
 ├── tests/               # Unit tests
 │   ├── __init__.py
@@ -463,7 +506,8 @@ adult_video_censorship/
 ├── output/              # Processed videos
 ├── config.json          # Main configuration
 ├── requirements.txt     # Python dependencies
-├── run.py              # Application entry point
+├── run.py              # CLI application entry point
+├── run_gui.py          # GUI application entry point
 └── README.md           # This file
 ```
 
@@ -483,7 +527,16 @@ This project is provided as-is for educational and personal use.
 
 ## Version History
 
-### v2.0.0 (Current)
+### v2.1.0 (Current)
+- Added modern CustomTkinter GUI with dark theme
+- Added video preview with playback controls
+- Added real-time configuration editor
+- Added detection statistics display
+- Added integrated processing button
+- Added profile management in GUI
+- Added video player with frame scrubbing
+
+### v2.0.0
 - Complete modular refactoring
 - Added batch processing mode
 - Added preview mode
