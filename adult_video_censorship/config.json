@@ -4,9 +4,18 @@
     "private_detection": true,
 
     "face_model": "models/face_detector.tflite",
-    "private_model": "models/private_regions.pt",
+    "private_model": "",
+    "private_detector_type": "nudenet",
 
     "private_class_ids": [],
+    "private_labels": [
+        "FEMALE_BREAST_EXPOSED",
+        "FEMALE_GENITALIA_EXPOSED",
+        "MALE_GENITALIA_EXPOSED",
+        "BUTTOCKS_EXPOSED",
+        "ANUS_EXPOSED"
+    ],
+    "private_confidence": 0.35,
 
     "confidence": 0.35,
     "detect_every_n_frames": 2,

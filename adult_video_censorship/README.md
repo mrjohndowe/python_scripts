@@ -8,6 +8,7 @@ Single-video censorship utility for Windows.
 - Select one video at a time.
 - No automatic folder processing.
 - Face detection using MediaPipe Tasks.
+- NudeNet pre-trained nudity detection (no custom training required).
 - Optional custom YOLO private-region detector.
 - Blur, pixelation, emoji, image, or solid-box overlays.
 - Configurable overlay settings.
@@ -73,6 +74,10 @@ Output:
 
 Edit config.json.
 
+To use NudeNet instead of YOLO, copy config_NudeNet.json to config.json:
+
+    Copy-Item config_NudeNet.json config.json
+
 Supported overlay types:
 
 - blur
@@ -119,12 +124,45 @@ Example custom image:
 
 ## Private-Region Detection
 
-Private-region detection requires a compatible custom-trained
-YOLO model.
+Private-region detection supports two options:
+
+### Option 1: NudeNet (Recommended)
+
+NudeNet is a pre-trained nudity detection model that recognizes
+anatomical regions out of the box. No custom training required.
+
+Configuration:
+
+Set in config.json:
+
+    "private_detector_type": "nudenet",
+    "private_labels": [
+        "FEMALE_BREAST_EXPOSED",
+        "FEMALE_GENITALIA_EXPOSED",
+        "MALE_GENITALIA_EXPOSED",
+        "BUTTOCKS_EXPOSED",
+        "ANUS_EXPOSED"
+    ],
+    "private_confidence": 0.35
+
+NudeNet is included in requirements.txt and will use the bundled
+320n model by default. For higher accuracy, download the 640m model
+and set:
+
+    "private_model": "models/nudenet_640m.onnx"
+
+### Option 2: Custom YOLO Model
+
+Requires a compatible custom-trained YOLO model.
 
 Place it here:
 
     models\private_regions.pt
+
+Configuration:
+
+    "private_detector_type": "yolo",
+    "private_class_ids": [0, 1, 2],
 
 The model must recognize the regions you want censored.
 
@@ -136,6 +174,7 @@ private anatomical regions.
 - Face detection may miss partially hidden faces.
 - Detection boxes are reused between detector frames.
 - This implementation does not perform optical-flow tracking.
-- Private-region detection is skipped if its model is missing.
+- Private-region detection is skipped if its model is missing (YOLO) or fails to initialize (NudeNet).
+- NudeNet uses a default 320n model; for higher accuracy use the 640m model.
 - Always review processed videos.
 - This implementation does not provide a live preview window.

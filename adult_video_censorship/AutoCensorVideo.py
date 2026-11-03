@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ============================================================
 # AUTOCENSORVIDEO
-# Windows | Python 3.12+ | MediaPipe Tasks + NudeNet
+# Windows | Python 3.14 | MediaPipe Tasks
 # Processes ONE selected video per execution.
 # ============================================================
 
@@ -36,14 +36,12 @@ DEFAULT_CONFIG = {
     "private_detection": True,
 
     "face_model": "models/face_detector.tflite",
+    "private_model": "models/private_regions.pt",
+    "private_detector_type": "yolo",
+
+    "private_class_ids": [],
+    "private_labels": [],
     "private_confidence": 0.35,
-    "private_labels": [
-        "FEMALE_BREAST_EXPOSED",
-        "FEMALE_GENITALIA_EXPOSED",
-        "MALE_GENITALIA_EXPOSED",
-        "BUTTOCKS_EXPOSED",
-        "ANUS_EXPOSED"
-    ],
 
     "confidence": 0.35,
     "detect_every_n_frames": 2,
@@ -82,25 +80,27 @@ DEFAULT_CONFIG = {
 
 
 def load_config():
-    """Create config.json if absent and merge missing nested defaults."""
+    """Create config.json if it does not exist."""
+
     if not CONFIG_PATH.exists():
-        CONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, indent=4), encoding="utf-8")
+        CONFIG_PATH.write_text(
+            json.dumps(DEFAULT_CONFIG, indent=4),
+            encoding="utf-8"
+        )
 
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         config = json.load(f)
 
+    # Fill missing configuration values.
     for key, value in DEFAULT_CONFIG.items():
-        if key not in config:
-            config[key] = value.copy() if isinstance(value, dict) else value
+        config.setdefault(key, value)
 
-    for section, defaults in DEFAULT_CONFIG["overlay"].items():
-        config["overlay"].setdefault(section, {})
-        for key, value in defaults.items():
-            config["overlay"][section].setdefault(key, value)
+    config.setdefault("overlay", {})
 
-    config.setdefault("encoding", {})
-    for key, value in DEFAULT_CONFIG["encoding"].items():
-        config["encoding"].setdefault(key, value)
+    for key, value in DEFAULT_CONFIG["overlay"].items():
+        config["overlay"].setdefault(key, value.copy())
+
+    config.setdefault("encoding", DEFAULT_CONFIG["encoding"].copy())
 
     return config
 
@@ -276,60 +276,157 @@ def detect_faces(detector, frame, timestamp_ms):
 
 
 # ------------------------------------------------------------
-# NUDENET PRIVATE-REGION DETECTOR
+# OPTIONAL YOLO PRIVATE-REGION DETECTOR
 # ------------------------------------------------------------
 
-PRIVATE_LABELS_DEFAULT = {
-    "FEMALE_BREAST_EXPOSED",
-    "FEMALE_GENITALIA_EXPOSED",
-    "MALE_GENITALIA_EXPOSED",
-    "BUTTOCKS_EXPOSED",
-    "ANUS_EXPOSED",
-}
-
-
-def create_private_detector(config):
-    """Initialize NudeNet's bundled pretrained 320n ONNX detector."""
-    if not config.get("private_detection", True):
-        print("[INFO] Private-region detection is disabled in config.")
-        return None
+def create_nudenet_detector(config):
+    """Load NudeNet detector."""
 
     try:
         from nudenet import NudeDetector
-        print("[INFO] Loading NudeNet pretrained private-region detector...")
-        detector = NudeDetector()
-        print("[INFO] NudeNet detector ready (bundled 320n model).")
-        return detector
+
+        print("[INFO] Loading NudeNet detector...")
+
+        model_path = config.get("private_model", None)
+
+        if model_path and Path(model_path).exists():
+            return NudeDetector(model_path=str(model_path))
+        else:
+            return NudeDetector()
+
     except Exception as error:
         print("[WARNING] NudeNet initialization failed:", error)
-        print('[WARNING] Install it with: python -m pip install "nudenet>=3.4.2"')
         return None
 
 
-def detect_private_regions(detector, frame, confidence, labels):
-    """Detect configured exposed-region labels; NudeNet boxes are x,y,w,h."""
-    if detector is None:
-        return []
+def create_private_detector(config):
+    """Load an optional custom-trained YOLO model or NudeNet."""
 
-    allowed = set(labels or PRIVATE_LABELS_DEFAULT)
+    if not config.get("private_detection", True):
+        return None
+
+    detector_type = config.get(
+        "private_detector_type",
+        "yolo"
+    ).lower()
+
+    if detector_type == "nudenet":
+        return create_nudenet_detector(config)
+
+    model_path = ROOT / config.get(
+        "private_model",
+        "models/private_regions.pt"
+    )
+
+    if not model_path.exists():
+        print(
+            "[WARNING] Private-region model not found:",
+            model_path
+        )
+        print(
+            "Private-region detection is disabled until "
+            "a compatible custom YOLO model is supplied."
+        )
+        return None
+
+    try:
+        from ultralytics import YOLO
+
+        print("[INFO] Loading private-region detector...")
+
+        return YOLO(str(model_path))
+
+    except Exception as error:
+        print("[WARNING] YOLO initialization failed:", error)
+        return None
+
+
+def detect_nudenet_regions(
+    detector,
+    frame,
+    confidence,
+    labels
+):
+    """Detect regions using NudeNet."""
+
     try:
         detections = detector.detect(frame)
     except Exception as error:
-        print("[WARNING] NudeNet frame detection failed:", error)
+        print("[WARNING] NudeNet detection failed:", error)
         return []
 
     boxes = []
-    for item in detections:
-        label = str(item.get("class", "")).upper()
-        score = float(item.get("score", 0.0))
-        if label not in allowed or score < float(confidence):
+    allowed_labels = set(labels) if labels else None
+
+    for detection in detections:
+        label = detection.get("class", "")
+        score = detection.get("score", 0.0)
+
+        if score < confidence:
             continue
 
-        box = item.get("box", [])
-        if len(box) != 4:
+        if allowed_labels and label not in allowed_labels:
             continue
-        x, y, w, h = map(int, box)
-        boxes.append((x, y, x + w, y + h))
+
+        box = detection.get("box", [0, 0, 0, 0])
+
+        if len(box) == 4:
+            x, y, width, height = box
+            x2 = x + width
+            y2 = y + height
+            boxes.append((x, y, x2, y2))
+
+    return boxes
+
+
+def detect_private_regions(
+    model,
+    frame,
+    confidence,
+    class_ids,
+    detector_type="yolo",
+    labels=None
+):
+    """Detect regions using a custom YOLO model or NudeNet."""
+
+    if model is None:
+        return []
+
+    if detector_type == "nudenet":
+        return detect_nudenet_regions(
+            model,
+            frame,
+            confidence,
+            labels or []
+        )
+
+    results = model.predict(
+        frame,
+        conf=confidence,
+        verbose=False
+    )
+
+    boxes = []
+    allowed_classes = set(class_ids)
+
+    for result in results:
+        if result.boxes is None:
+            continue
+
+        for detection in result.boxes:
+            class_id = int(detection.cls[0])
+
+            if (
+                allowed_classes
+                and class_id not in allowed_classes
+            ):
+                continue
+
+            coordinates = detection.xyxy[0].tolist()
+
+            boxes.append(
+                tuple(map(int, coordinates))
+            )
 
     return boxes
 
@@ -558,210 +655,154 @@ def apply_overlay(frame, box, settings):
 # ------------------------------------------------------------
 
 def process_video(video, config):
+    """Process one video, then mux the original audio into an MP4."""
     ffmpeg, ffprobe = find_ffmpeg()
+    source_width, source_height, fps, duration = get_video_info(video, ffprobe)
 
-    width, height, fps, duration = get_video_info(
-        video,
-        ffprobe
-    )
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output = OUTPUT_DIR / f"{video.stem}_censored.mp4"
+    # MJPEG/AVI is a reliable OpenCV intermediate on Windows. MP4V output
+    # from OpenCV can be empty/unreadable with some installed codecs.
+    temporary = OUTPUT_DIR / f"{video.stem}_processed_temp.avi"
 
-    OUTPUT_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    output = OUTPUT_DIR / (
-        video.stem + "_censored.mp4"
-    )
-
-    temporary = OUTPUT_DIR / (
-        video.stem + "_processed_temp.avi"
-    )
-
-    capture = cv2.VideoCapture(
-        str(video)
-    )
-
+    capture = cv2.VideoCapture(str(video))
     if not capture.isOpened():
-        raise RuntimeError(
-            "Could not open selected video."
-        )
+        raise RuntimeError(f"Could not open selected video:\n{video}")
 
+    # OpenCV may apply the Samsung Display Matrix rotation automatically.
+    # Therefore determine dimensions from the actual decoded frame, not
+    # from FFprobe's unrotated 1920x1080 stream dimensions.
+    try:
+        capture.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
+    except Exception:
+        pass
+
+    ok, first_frame = capture.read()
+    if not ok or first_frame is None:
+        capture.release()
+        raise RuntimeError("Could not decode the first frame of the selected video.")
+
+    frame_height, frame_width = first_frame.shape[:2]
     writer = cv2.VideoWriter(
         str(temporary),
         cv2.VideoWriter_fourcc(*"MJPG"),
         fps,
-        (width, height)
+        (frame_width, frame_height),
     )
-
     if not writer.isOpened():
         capture.release()
-        raise RuntimeError("Could not initialize MJPEG video writer.")
+        raise RuntimeError(f"Could not create intermediate AVI:\n{temporary}")
 
     face_detector = None
     private_detector = None
+    frame_count = 0
+    face_boxes = []
+    private_boxes = []
+    detection_interval = max(1, int(config.get("detect_every_n_frames", 2)))
 
-    ffprobe -v error -show_streams .\output\20261029_062921_processed_temp.avi
+    print("\n================================")
+    print("AUTOCENSORVIDEO")
+    print("================================")
+    print("Input:", video)
+    print("Output:", output)
+    print(f"Source stream: {source_width} x {source_height}")
+    print(f"Decoded/writer frame: {frame_width} x {frame_height}")
+    print("FPS:", round(fps, 2))
+    print("Duration:", round(duration, 2))
+    print("Intermediate:", temporary)
+    print("--------------------------------")
 
     try:
+        face_detector = create_face_detector(config)
+        private_detector = create_private_detector(config)
 
-        face_detector = create_face_detector(
-            config
-        )
+        # Process the already-read first frame, then continue reading.
+        frame = first_frame
+        while frame is not None:
+            if frame.shape[1] != frame_width or frame.shape[0] != frame_height:
+                # Keep writer dimensions stable if a decoder reports a frame
+                # with a different shape (unusual, but safer than silent drops).
+                frame = cv2.resize(frame, (frame_width, frame_height))
 
-        private_detector = create_private_detector(
-            config
-        )
-
-        face_boxes = []
-        private_boxes = []
-
-        detection_interval = max(
-            1,
-            int(
-                config.get(
-                    "detect_every_n_frames", 2
-                )
-            )
-        )
-
-        frame_number = 0
-
-        print()
-        print("================================")
-        print("AUTOCENSORVIDEO")
-        print("================================")
-        print("Input:", video)
-        print("Output:", output)
-        print("Resolution:", width, "x", height)
-        print("FPS:", round(fps, 2))
-        print("Private detection:", "enabled" if private_detector else "disabled")
-        print("Duration:", round(duration, 2))
-        print("--------------------------------")
-
-        while True:
-
-            success, frame = capture.read()
-
-            if not success:
-                break
-
-            timestamp_ms = int(
-                frame_number * 1000 / fps
-            )
-
-            # Run detectors periodically
-            if frame_number % detection_interval == 0:
-
-                face_boxes = detect_faces(
-                    face_detector,
-                    frame,
-                    timestamp_ms
-                )
-
+            timestamp_ms = int(frame_count * 1000 / fps)
+            if frame_count % detection_interval == 0:
+                face_boxes = detect_faces(face_detector, frame, timestamp_ms)
                 private_boxes = detect_private_regions(
                     private_detector,
                     frame,
-                    config.get("private_confidence", config.get("confidence", 0.35)),
-                    config.get("private_labels", list(PRIVATE_LABELS_DEFAULT))
+                    float(config.get("private_confidence", config.get("confidence", 0.35))),
+                    config.get("private_class_ids", []),
+                    config.get("private_detector_type", "yolo"),
+                    config.get("private_labels", [])
                 )
-
-            # Face overlays
-            face_settings = config["overlay"]["face"]
 
             for box in face_boxes:
-
-                apply_overlay(
-                    frame,
-                    box,
-                    face_settings
-                )
-
-            # Private-region overlays
-            private_settings = config["overlay"]["private"]
-
+                apply_overlay(frame, box, config["overlay"]["face"])
             for box in private_boxes:
-
-                apply_overlay(
-                    frame,
-                    box,
-                    private_settings
-                )
+                apply_overlay(frame, box, config["overlay"]["private"])
 
             writer.write(frame)
+            frame_count += 1
 
-            frame_number += 1
+            if frame_count % max(1, int(fps * 10)) == 0:
+                print(f"Processed {frame_count / fps:.0f} / {duration:.0f} seconds")
 
-            if frame_number % max(
-                1, int(fps * 10)
-            ) == 0:
-
-                print(
-                    f"Processed "
-                    f"{frame_number / fps:.0f} / "
-                    f"{duration:.0f} seconds"
-                )
+            ok, next_frame = capture.read()
+            frame = next_frame if ok else None
 
     finally:
-
         capture.release()
         writer.release()
-
-        if face_detector:
+        if face_detector is not None:
             face_detector.close()
 
-    # --------------------------------------------------------
-    # FINAL ENCODING + ORIGINAL AUDIO
-    # --------------------------------------------------------
+    if frame_count <= 0:
+        temporary.unlink(missing_ok=True)
+        raise RuntimeError("No frames were processed; intermediate video was not created.")
 
-    encoding = config.get(
-        "encoding", {}
-    )
+    # Validate the intermediate before asking FFmpeg to encode it.
+    probe_cmd = [
+        ffprobe, "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=codec_name,width,height,nb_frames",
+        "-of", "json", str(temporary),
+    ]
+    probe = subprocess.run(probe_cmd, capture_output=True, text=True)
+    if probe.returncode != 0:
+        raise RuntimeError(
+            "FFprobe could not read the processed AVI:\n" + probe.stderr.strip()
+        )
+    probe_data = json.loads(probe.stdout or "{}")
+    streams = probe_data.get("streams", [])
+    if not streams:
+        raise RuntimeError(
+            f"Processed AVI contains no video stream:\n{temporary}\n"
+            f"Frames submitted to writer: {frame_count}"
+        )
+    print("Intermediate validation:", streams[0])
+    print("Frames submitted:", frame_count)
 
-    print()
-    print("Encoding final MP4...")
-
+    encoding = config.get("encoding", {})
+    codec = encoding.get("codec", "libx264")
+    audio_codec = encoding.get("audio", "copy")
     command = [
-        ffmpeg,
-        "-y",
-
+        ffmpeg, "-y",
         "-i", str(temporary),
         "-i", str(video),
-
         "-map", "0:v:0",
         "-map", "1:a?",
-
-        "-c:v", encoding.get(
-            "codec", "libx264"
-        ),
-
-        "-crf", str(
-            encoding.get("crf", 20)
-        ),
-
-        "-preset", encoding.get(
-            "preset", "medium"
-        ),
-
-        "-c:a", encoding.get(
-            "audio", "copy"
-        ),
-
+        "-c:v", codec,
+        "-crf", str(encoding.get("crf", 20)),
+        "-preset", str(encoding.get("preset", "medium")),
+        "-c:a", str(audio_codec),
         "-shortest",
-        str(output)
+        str(output),
     ]
 
-    subprocess.run(
-        command,
-        check=True
-    )
+    print("\nEncoding final MP4 and copying original audio...")
+    subprocess.run(command, check=True)
+    temporary.unlink(missing_ok=True)
 
-    temporary.unlink(
-        missing_ok=True
-    )
-
-    print()
-    print("================================")
+    print("\n================================")
     print("PROCESSING COMPLETE")
     print("================================")
     print("Saved:", output)

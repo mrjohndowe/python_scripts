@@ -1,6 +1,7 @@
 {
     "face_detection": true,
     "private_detection": true,
+    "private_detector_type": "nudenet",
     "face_model": "models/face_detector.tflite",
     "confidence": 0.35,
     "detect_every_n_frames": 2,
