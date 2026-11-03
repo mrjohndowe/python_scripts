@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1536" viewBox="0 0 1024 1536">
+  <title>Animated Work Crew group chat</title>
+  <desc>A dark-mode group chat with animated message bubbles. Messages: I need to get out of the house; I can not be in the apartment any longer; Someone call me into work Please.</desc>
+  <defs>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1684ff"/><stop offset="1" stop-color="#0864df"/></linearGradient>
+    <linearGradient id="gray" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#343438"/><stop offset="1" stop-color="#29292d"/></linearGradient>
+    <style>
+      text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+      .white{fill:#f5f5f7}.muted{fill:#a4a4aa}
+      .incoming{fill:url(#gray)}.outgoing{fill:url(#blue)}
+      .msg{font-size:38px;font-weight:400}
+      .name{font-size:27px;fill:#a5a5ab}
+      .time{font-size:25px;fill:#a5a5ab}
+      .blueIcon{fill:none;stroke:#087cff;stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+      .bubble{opacity:0;animation:pop .65s ease-out forwards}
+      .m1{animation-delay:1s}.m2{animation-delay:2.8s}.m3{animation-delay:4.5s}
+      .m4{animation-delay:6.2s}.m5{animation-delay:8s}.m6{animation-delay:9.7s}
+      .m7{animation-delay:11.4s}
+      @keyframes pop{0%{opacity:0;transform:translateY(18px) scale(.97)}70%{opacity:1;transform:translateY(-2px) scale(1.01)}100%{opacity:1;transform:translateY(0) scale(1)}}
+      .typing{opacity:0;animation:typing 1.2s ease-in-out 7.1s 2}
+      @keyframes typing{0%,100%{opacity:0}30%,70%{opacity:1}}
+      .tick{stroke:#087cff;stroke-width:4;fill:none;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+  </defs>
+  <rect width="1024" height="1536" fill="#000"/>
+  <!-- Status bar -->
+  <text id="statusClock" x="40" y="49" class="white" font-size="39" font-weight="600">--:-- --</text>
+  <g fill="#f4f4f5"><rect x="742" y="27" width="9" height="24" rx="3"/><rect x="757" y="20" width="9" height="31" rx="3"/><rect x="772" y="13" width="9" height="38" rx="3"/><rect x="787" y="7" width="9" height="44" rx="3"/></g>
+  <path d="M820 24 Q842 2 864 24 M826 31 Q842 15 858 31 M837 40 Q842 35 847 40" stroke="#f5f5f7" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <text x="874" y="48" class="white" font-size="36">87%</text><rect x="940" y="17" width="53" height="28" rx="6" stroke="#f5f5f7" stroke-width="4" fill="none"/><rect x="945" y="22" width="39" height="18" rx="3" fill="#f5f5f7"/><rect x="995" y="25" width="5" height="12" rx="2" fill="#f5f5f7"/>
+  <!-- Header -->
+  <path d="M65 103 L38 130 L65 157" class="blueIcon"/>
+  <circle cx="242" cy="126" r="58" fill="#414146"/>
+  <g fill="#f5f5f7"><circle cx="224" cy="111" r="13"/><circle cx="260" cy="111" r="13"/><circle cx="242" cy="101" r="16"/><path d="M197 151 Q198 128 224 128 Q250 128 251 151Z"/><path d="M235 151 Q237 126 260 128 Q284 130 286 151Z"/></g>
+  <text x="329" y="120" class="white" font-size="45" font-weight="650">Work Crew</text><text x="329" y="164" class="muted" font-size="33">5 members</text>
+  <path d="M814 104 Q801 115 815 134 L839 158 Q851 168 862 154 L849 140 L839 145 L826 132 L832 121Z" class="blueIcon"/>
+  <rect x="923" y="106" width="49" height="42" rx="7" class="blueIcon"/><path d="M973 117 L994 105 L994 149 L973 137" class="blueIcon"/>
+  <path d="M0 196 H1024" stroke="#242428" stroke-width="2"/>
+  <text x="512" y="235" text-anchor="middle" class="muted" font-size="32">Today 3:26 PM</text>
+  <!-- Messages -->
+  <g class="bubble m1">
+    <text x="166" y="282" class="name">Manager Mike</text><circle cx="70" cy="315" r="42" fill="#505055"/><text x="70" y="330" text-anchor="middle" class="white" font-size="45">M</text>
+    <path d="M143 292 Q143 262 173 262 H455 Q486 262 486 292 V330 Q486 360 455 360 H173 Q143 360 143 330Z" class="incoming"/>
+    <text x="174" y="326" class="white msg">What’s up team?</text><text id="msgTime1" x="166" y="389" class="time">3:26 PM</text>
+  </g>
+  <g class="bubble m2">
+    <text x="166" y="432" class="name">Jessica</text><circle cx="70" cy="476" r="42" fill="#7548c8"/><text x="70" y="491" text-anchor="middle" class="white" font-size="45">J</text>
+    <path d="M143 449 Q143 419 173 419 H667 Q697 419 697 449 V497 Q697 527 667 527 H173 Q143 527 143 497Z" class="incoming"/>
+    <text x="174" y="463" class="white msg">Anyone else feeling trapped</text><text x="174" y="507" class="white msg">today? 😩</text><text id="msgTime2" x="166" y="554" class="time">3:27 PM</text>
+  </g>
+  <g class="bubble m3">
+    <path d="M408 574 Q408 542 440 542 H966 Q996 542 996 574 V614 Q996 644 966 644 H440 Q408 644 408 614Z" class="outgoing"/>
+    <text x="440" y="607" class="white msg">I need to get out of the house.</text><text id="msgTime3" x="833" y="674" class="time">3:28 PM</text><text x="1000" y="674" text-anchor="end" fill="#087cff" font-size="25" font-weight="700">✓✓</text>
+  </g>
+  <g class="bubble m4">
+    <text x="166" y="716" class="name">Dave</text><circle cx="70" cy="760" r="42" fill="#278b49"/><text x="70" y="775" text-anchor="middle" class="white" font-size="45">D</text>
+    <path d="M143 733 Q143 703 173 703 H640 Q670 703 670 733 V781 Q670 811 640 811 H173 Q143 811 143 781Z" class="incoming"/>
+    <text x="174" y="748" class="white msg">Same here. This apartment</text><text x="174" y="792" class="white msg">is killing me. 😅</text><text id="msgTime4" x="166" y="838" class="time">3:29 PM</text>
+  </g>
+  <g class="bubble m5">
+    <path d="M357 859 Q357 829 387 829 H966 Q996 829 996 859 V899 Q996 929 966 929 H387 Q357 929 357 899Z" class="outgoing"/>
+    <text x="389" y="875" class="white msg">I can not be in the apartment</text><text x="389" y="925" class="white msg">any longer.</text><text id="msgTime5" x="833" y="958" class="time">3:30 PM</text><text x="1000" y="958" text-anchor="end" fill="#087cff" font-size="25" font-weight="700">✓✓</text>
+  </g>
+  <g class="bubble m6">
+    <text x="166" y="1000" class="name">Manager Mike</text><circle cx="70" cy="1044" r="42" fill="#505055"/><text x="70" y="1059" text-anchor="middle" class="white" font-size="45">M</text>
+    <path d="M143 1017 Q143 987 173 987 H642 Q672 987 672 1017 V1065 Q672 1095 642 1095 H173 Q143 1095 143 1065Z" class="incoming"/>
+    <text x="174" y="1032" class="white msg">I hear you. Anyone need a</text><text x="174" y="1076" class="white msg">ride or anything?</text><text id="msgTime6" x="166" y="1122" class="time">3:30 PM</text>
+  </g>
+  <g class="bubble m7">
+    <path d="M306 1143 Q306 1113 336 1113 H966 Q996 1113 996 1143 V1183 Q996 1213 966 1213 H336 Q306 1213 306 1183Z" class="outgoing"/>
+    <text x="338" y="1178" class="white msg">Someone call me into work Please.</text><text id="msgTime7" x="833" y="1242" class="time">3:31 PM</text><text x="1000" y="1242" text-anchor="end" fill="#087cff" font-size="25" font-weight="700">✓✓</text>
+  </g>
+  <g class="bubble" style="animation-delay:13s">
+    <text x="166" y="1280" class="name">Jessica</text><circle cx="70" cy="1324" r="42" fill="#7548c8"/><text x="70" y="1339" text-anchor="middle" class="white" font-size="45">J</text>
+    <path d="M143 1297 Q143 1267 173 1267 H655 Q685 1267 685 1297 V1345 Q685 1375 655 1375 H173 Q143 1375 143 1345Z" class="incoming"/>
+    <text x="174" y="1312" class="white msg">Got it. I’ll see what I can do.</text><text id="msgTime8" x="166" y="1402" class="time">3:31 PM</text>
+  </g>
+  <!-- Composer -->
+  <path d="M0 1420 H1024" stroke="#242428" stroke-width="2"/>
+  <circle cx="65" cy="1474" r="45" fill="#252529"/><path d="M65 1450 V1498 M41 1474 H89" stroke="#eee" stroke-width="6" stroke-linecap="round"/>
+  <rect x="134" y="1437" width="758" height="75" rx="38" fill="#19191c" stroke="#4a4a4f" stroke-width="3"/>
+  <text x="171" y="1484" fill="#929298" font-size="39">Type a message...</text>
+  <circle cx="845" cy="1474" r="28" stroke="#aaa" stroke-width="4" fill="none"/><circle cx="835" cy="1467" r="3.5" fill="#aaa"/><circle cx="855" cy="1467" r="3.5" fill="#aaa"/><path d="M835 1480 Q845 1490 855 1480" stroke="#aaa" stroke-width="3" fill="none"/>
+  <path d="M928 1460 L995 1441 L974 1503 L957 1478Z" fill="#087cff"/><path d="M957 1478 L995 1441" stroke="#a7d4ff" stroke-width="3"/>
+
+
+<script><![CDATA[
+(function(){
+ const NS="http://www.w3.org/2000/svg";
+ function fmt(d){return new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",hour12:true,timeZone:"America/Denver"}).format(d);}
+ function clock(){const n=new Date(),c=document.getElementById("statusClock");if(c)c.textContent=fmt(n);
+  const h=[...document.querySelectorAll("text")].find(t=>/^Today /.test(t.textContent));if(h)h.textContent="Today "+fmt(n);
+  let b=new Date(n);b.setSeconds(0,0);b.setMinutes(b.getMinutes()-6);for(let i=1;i<=8;i++){let e=document.getElementById("msgTime"+i);if(e)e.textContent=fmt(new Date(b.getTime()+(i-1)*60000));}}
+ function convertShape(g){let sh=g.querySelector("path.incoming,path.outgoing");if(!sh)return null;
+  if(sh.tagName.toLowerCase()==="path"){let b=sh.getBBox(),r=document.createElementNS(NS,"rect");r.setAttribute("class",sh.getAttribute("class"));r.setAttribute("x",b.x);r.setAttribute("y",b.y);r.setAttribute("width",b.width);r.setAttribute("height",b.height);r.setAttribute("rx","28");r.setAttribute("fill",getComputedStyle(sh).fill);sh.parentNode.insertBefore(r,sh);sh.remove();sh=r;}return sh;}
+ function layoutOne(g){let r=convertShape(g);if(!r)return;let texts=[...g.querySelectorAll("text.msg")];if(!texts.length)return;
+  let x=+r.getAttribute("x"),y=+r.getAttribute("y"),w=+r.getAttribute("width"),h=+r.getAttribute("height");
+  let outgoing=r.getAttribute("class").includes("outgoing"),pad=30,available=w-pad*2,lineHeight=46;
+  let top=Infinity,bottom=-Infinity,maxLineWidth=0;
+  texts.forEach(el=>{let raw=el.getAttribute("data-raw");if(raw==null){raw=el.textContent.replace(/\s+/g," ").trim();el.setAttribute("data-raw",raw);}
+   el.setAttribute("contenteditable","true");el.style.cursor="text";
+   let probe=document.createElementNS(NS,"text");probe.setAttribute("class",el.getAttribute("class"));probe.setAttribute("visibility","hidden");g.appendChild(probe);
+   let lines=[],line="";raw.split(/\s+/).forEach(word=>{let test=line?line+" "+word:word;probe.textContent=test;
+    if(line&&probe.getComputedTextLength()>available){lines.push(line);line=word;}else line=test;});if(line)lines.push(line);
+   probe.remove();let ex=+el.getAttribute("x"),ey=+el.getAttribute("y");while(el.firstChild)el.removeChild(el.firstChild);
+   lines.forEach((txt,i)=>{let sp=document.createElementNS(NS,"tspan");sp.setAttribute("x",ex);sp.setAttribute("dy",i?lineHeight:0);sp.textContent=txt;el.appendChild(sp);});
+   top=Math.min(top,ey);bottom=Math.max(bottom,ey+(lines.length-1)*lineHeight);lines.forEach(t=>maxLineWidth=Math.max(maxLineWidth,measure(t,el.getAttribute("class"))));
+  });
+  function measure(t,cl){let z=document.createElementNS(NS,"text");z.setAttribute("class",cl);z.setAttribute("visibility","hidden");z.textContent=t;g.appendChild(z);let a=z.getComputedTextLength();z.remove();return a;}
+  let newH=Math.max(h,bottom-y+lineHeight+24),newW=Math.max(w,maxLineWidth+pad*2);
+  r.setAttribute("height",newH);r.setAttribute("width",newW);
+  // Preserve left alignment for incoming, right edge alignment for outgoing bubbles.
+  if(outgoing)r.setAttribute("x",x+w-newW);
+ }
+ function layout(){document.querySelectorAll("g.bubble").forEach(layoutOne);}
+ function addChecks(){document.querySelectorAll("path.tick").forEach(old=>{let parent=old.parentNode;old.remove();
+  let x=974,y=1240;let c=document.createElementNS(NS,"text");c.setAttribute("class","blueChecks");c.setAttribute("fill","#087cff");c.setAttribute("font-size","24");c.setAttribute("font-weight","700");c.setAttribute("text-anchor","end");c.setAttribute("x",1000);c.setAttribute("y",y);c.textContent="✓✓";parent.appendChild(c);});}
+ function init(){clock();setInterval(clock,1000);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);else setTimeout(layout,300);
+  document.addEventListener("input",e=>{let t=e.target.closest&&e.target.closest("text.msg");if(t){t.setAttribute("data-raw",t.textContent.replace(/\s+/g," ").trim());layout();}});
+ }
+ if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+})();
+]]></script>
+
+</svg>
