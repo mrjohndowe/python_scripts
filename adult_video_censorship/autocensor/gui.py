@@ -841,6 +841,96 @@ class MainWindow(ctk.CTk):
         self._setup_window()
         self._setup_layout()
 
+    def on_file_select(self, file_path: Path) -> None:
+        """Handle file selection.
+
+        Args:
+            file_path: Path to selected file.
+        """
+        self.video_path = file_path
+        self.video_preview.load_video(file_path)
+        logger.info(f"Selected video: {file_path}")
+
+    def on_profile_load(self, profile_name: str) -> None:
+        """Handle profile loading.
+
+        Args:
+            profile_name: Name of profile to load.
+        """
+        profile = load_profile(profile_name)
+        if profile:
+            self.config = profile
+            # Refresh config editor
+            self.config_editor.config = profile
+            logger.info(f"Loaded profile: {profile_name}")
+
+    def on_config_save(self, config: Config) -> None:
+        """Handle configuration save.
+
+        Args:
+            config: Configuration to save.
+        """
+        self.config = config
+        logger.info("Configuration saved")
+
+    def on_manual_box_added(self, box: tuple[int, int, int, int], box_type: str) -> None:
+        """Handle manual box addition.
+
+        Args:
+            box: Bounding box coordinates (x1, y1, x2, y2).
+            box_type: Type of box ("face" or "private").
+        """
+        logger.info(f"Manual box added: {box} ({box_type})")
+
+    def export_manual_boxes(self) -> None:
+        """Export manual boxes to JSON."""
+        import json
+        from tkinter import filedialog
+
+        if not self.manual_boxes:
+            logger.warning("No manual boxes to export")
+            return
+
+        root = ctk.CTk()
+        root.withdraw()
+
+        file_path = filedialog.asksaveasfilename(
+            title="Export Manual Boxes",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+
+        root.destroy()
+
+        if file_path:
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(self.manual_boxes, f, indent=2)
+            logger.info(f"Manual boxes exported to: {file_path}")
+
+    def load_manual_boxes(self) -> None:
+        """Load manual boxes from JSON."""
+        import json
+        from tkinter import filedialog
+
+        root = ctk.CTk()
+        root.withdraw()
+
+        file_path = filedialog.askopenfilename(
+            title="Load Manual Boxes",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+
+        root.destroy()
+
+        if file_path:
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    self.manual_boxes = json.load(f)
+                self.video_preview.manual_boxes = self.manual_boxes
+                logger.info(f"Manual boxes loaded from: {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to load manual boxes: {e}")
+
     def _setup_window(self) -> None:
         """Setup the main window."""
         ctk.set_appearance_mode("dark")
