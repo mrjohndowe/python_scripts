@@ -12,9 +12,24 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 # ============================================================
-# AUTOCENSORVIDEO
+# AUTOCENSORVIDEO (DEPRECATED - Use run.py instead)
 # Windows | Python 3.14 | MediaPipe Tasks
 # Processes ONE selected video per execution.
+#
+# DEPRECATION NOTICE:
+# This script is the old monolithic version (v1.0).
+# Please use the new modular version by running:
+#     python .\run.py
+#
+# See MIGRATION.md for migration guide.
+# The new version includes:
+# - Batch processing
+# - Preview mode
+# - Configuration profiles
+# - Progress bars
+# - Processing statistics
+# - Better error handling
+# - Unit tests
 # ============================================================
 
 ROOT = Path(__file__).resolve().parent

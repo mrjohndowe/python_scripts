@@ -1,6 +1,8 @@
-
-opencv-python
+opencv-python==4.10.0.84
 mediapipe==0.10.21
-Pillow
-ultralytics
-nudenet>=3.4.2
+Pillow==11.0.0
+ultralytics==8.3.40
+nudenet==3.4.2
+tqdm==4.67.1
+pytest==8.3.4
+pytest-cov==6.0.0

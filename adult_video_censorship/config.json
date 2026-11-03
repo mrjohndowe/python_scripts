@@ -17,10 +17,10 @@
     "detect_every_n_frames": 2,
     "overlay": {
         "face": {
-            "type": "image",
+            "type": "pixelate",
             "emoji": "\ud83d\ude0e",
             "image": "C:\\Users\\MrJohnDowe\\OneDrive\\Pictures\\Coloring Pages\\67230959-69a9-4c29-b073-d65f986445fc.jpg",
-            "strength": 31,
+            "strength": 65,
             "padding": 0.15,
             "opacity": 1.0,
             "scale": 1.0,
