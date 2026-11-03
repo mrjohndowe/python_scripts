@@ -37,7 +37,7 @@ DEFAULT_CONFIG = {
 
     "face_model": "models/face_detector.tflite",
     "private_model": "models/private_regions.pt",
-    "private_detector_type": "yolo",
+    "private_detector_type": "nudenet",
 
     "private_class_ids": [],
     "private_labels": [],

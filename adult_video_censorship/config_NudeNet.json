@@ -3,8 +3,8 @@
     "private_detection": true,
     "private_detector_type": "nudenet",
     "face_model": "models/face_detector.tflite",
-    "confidence": 0.35,
-    "detect_every_n_frames": 2,
+    "confidence": 0.65,
+    "detect_every_n_frames": 1,
     "overlay": {
         "face": {
             "type": "blur",
@@ -41,7 +41,7 @@
         "preset": "medium",
         "audio": "copy"
     },
-    "private_confidence": 0.35,
+    "private_confidence": 0.45,
     "private_labels": [
         "FEMALE_BREAST_EXPOSED",
         "FEMALE_GENITALIA_EXPOSED",
