@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ============================================================
 # AUTOCENSORVIDEO
-# Windows | Python 3.14 | MediaPipe Tasks
+# Windows | Python 3.12+ | MediaPipe Tasks + NudeNet
 # Processes ONE selected video per execution.
 # ============================================================
 
@@ -36,9 +36,14 @@ DEFAULT_CONFIG = {
     "private_detection": True,
 
     "face_model": "models/face_detector.tflite",
-    "private_model": "models/private_regions.pt",
-
-    "private_class_ids": [],
+    "private_confidence": 0.35,
+    "private_labels": [
+        "FEMALE_BREAST_EXPOSED",
+        "FEMALE_GENITALIA_EXPOSED",
+        "MALE_GENITALIA_EXPOSED",
+        "BUTTOCKS_EXPOSED",
+        "ANUS_EXPOSED"
+    ],
 
     "confidence": 0.35,
     "detect_every_n_frames": 2,
@@ -77,27 +82,25 @@ DEFAULT_CONFIG = {
 
 
 def load_config():
-    """Create config.json if it does not exist."""
-
+    """Create config.json if absent and merge missing nested defaults."""
     if not CONFIG_PATH.exists():
-        CONFIG_PATH.write_text(
-            json.dumps(DEFAULT_CONFIG, indent=4),
-            encoding="utf-8"
-        )
+        CONFIG_PATH.write_text(json.dumps(DEFAULT_CONFIG, indent=4), encoding="utf-8")
 
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    # Fill missing configuration values.
     for key, value in DEFAULT_CONFIG.items():
-        config.setdefault(key, value)
+        if key not in config:
+            config[key] = value.copy() if isinstance(value, dict) else value
 
-    config.setdefault("overlay", {})
+    for section, defaults in DEFAULT_CONFIG["overlay"].items():
+        config["overlay"].setdefault(section, {})
+        for key, value in defaults.items():
+            config["overlay"][section].setdefault(key, value)
 
-    for key, value in DEFAULT_CONFIG["overlay"].items():
-        config["overlay"].setdefault(key, value.copy())
-
-    config.setdefault("encoding", DEFAULT_CONFIG["encoding"].copy())
+    config.setdefault("encoding", {})
+    for key, value in DEFAULT_CONFIG["encoding"].items():
+        config["encoding"].setdefault(key, value)
 
     return config
 
@@ -273,81 +276,60 @@ def detect_faces(detector, frame, timestamp_ms):
 
 
 # ------------------------------------------------------------
-# OPTIONAL YOLO PRIVATE-REGION DETECTOR
+# NUDENET PRIVATE-REGION DETECTOR
 # ------------------------------------------------------------
 
+PRIVATE_LABELS_DEFAULT = {
+    "FEMALE_BREAST_EXPOSED",
+    "FEMALE_GENITALIA_EXPOSED",
+    "MALE_GENITALIA_EXPOSED",
+    "BUTTOCKS_EXPOSED",
+    "ANUS_EXPOSED",
+}
+
+
 def create_private_detector(config):
-    """Load an optional custom-trained YOLO model."""
-
+    """Initialize NudeNet's bundled pretrained 320n ONNX detector."""
     if not config.get("private_detection", True):
-        return None
-
-    model_path = ROOT / config.get(
-        "private_model",
-        "models/private_regions.pt"
-    )
-
-    if not model_path.exists():
-        print(
-            "[WARNING] Private-region model not found:",
-            model_path
-        )
-        print(
-            "Private-region detection is disabled until "
-            "a compatible custom YOLO model is supplied."
-        )
+        print("[INFO] Private-region detection is disabled in config.")
         return None
 
     try:
-        from ultralytics import YOLO
-
-        print("[INFO] Loading private-region detector...")
-
-        return YOLO(str(model_path))
-
+        from nudenet import NudeDetector
+        print("[INFO] Loading NudeNet pretrained private-region detector...")
+        detector = NudeDetector()
+        print("[INFO] NudeNet detector ready (bundled 320n model).")
+        return detector
     except Exception as error:
-        print("[WARNING] YOLO initialization failed:", error)
+        print("[WARNING] NudeNet initialization failed:", error)
+        print('[WARNING] Install it with: python -m pip install "nudenet>=3.4.2"')
         return None
 
 
-def detect_private_regions(
-    model,
-    frame,
-    confidence,
-    class_ids
-):
-    """Detect regions using a custom YOLO model."""
-
-    if model is None:
+def detect_private_regions(detector, frame, confidence, labels):
+    """Detect configured exposed-region labels; NudeNet boxes are x,y,w,h."""
+    if detector is None:
         return []
 
-    results = model.predict(
-        frame,
-        conf=confidence,
-        verbose=False
-    )
+    allowed = set(labels or PRIVATE_LABELS_DEFAULT)
+    try:
+        detections = detector.detect(frame)
+    except Exception as error:
+        print("[WARNING] NudeNet frame detection failed:", error)
+        return []
 
     boxes = []
-    allowed_classes = set(class_ids)
-
-    for result in results:
-        if result.boxes is None:
+    for item in detections:
+        label = str(item.get("class", "")).upper()
+        score = float(item.get("score", 0.0))
+        if label not in allowed or score < float(confidence):
             continue
 
-        for detection in result.boxes:
-            class_id = int(detection.cls[0])
-
-            if (
-                allowed_classes
-                and class_id not in allowed_classes
-            ):
-                continue
-
-            coordinates = detection.xyxy[0].tolist()
-
-            boxes.append(
-                tuple(map(int, coordinates))
-            )
+        box = item.get("box", [])
+        if len(box) != 4:
+            continue
+        x, y, w, h = map(int, box)
+        boxes.append((x, y, x + w, y + h))
 
     return boxes
 
@@ -593,7 +575,7 @@ def process_video(video, config):
     )
 
     temporary = OUTPUT_DIR / (
-        video.stem + "_processed_temp.mp4"
+        video.stem + "_processed_temp.avi"
     )
 
     capture = cv2.VideoCapture(
@@ -607,20 +589,19 @@ def process_video(video, config):
 
     writer = cv2.VideoWriter(
         str(temporary),
-        cv2.VideoWriter_fourcc(*"mp4v"),
+        cv2.VideoWriter_fourcc(*"MJPG"),
         fps,
         (width, height)
     )
 
     if not writer.isOpened():
         capture.release()
-
-        raise RuntimeError(
-            "Could not create temporary video."
-        )
+        raise RuntimeError("Could not initialize MJPEG video writer.")
 
     face_detector = None
     private_detector = None
+
+    ffprobe -v error -show_streams .\output\20261029_062921_processed_temp.avi
 
     try:
 
@@ -654,6 +635,7 @@ def process_video(video, config):
         print("Output:", output)
         print("Resolution:", width, "x", height)
         print("FPS:", round(fps, 2))
+        print("Private detection:", "enabled" if private_detector else "disabled")
         print("Duration:", round(duration, 2))
         print("--------------------------------")
 
@@ -680,8 +662,8 @@ def process_video(video, config):
                 private_boxes = detect_private_regions(
                     private_detector,
                     frame,
-                    config.get("confidence", 0.35),
-                    config.get("private_class_ids", [])
+                    config.get("private_confidence", config.get("confidence", 0.35)),
+                    config.get("private_labels", list(PRIVATE_LABELS_DEFAULT))
                 )
 
             # Face overlays

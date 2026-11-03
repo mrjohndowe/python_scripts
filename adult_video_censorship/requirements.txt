@@ -1,5 +1,6 @@
 
 opencv-python
-mediapipe==0.10.30
+mediapipe==0.10.21
 Pillow
 ultralytics
+nudenet>=3.4.2
