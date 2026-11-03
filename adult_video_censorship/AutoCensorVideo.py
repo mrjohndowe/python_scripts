@@ -135,6 +135,95 @@ def select_video() -> Path | None:
     return Path(filename)
 
 
+def select_censoring_method(region_name):
+    """Ask user how they want to censor a specific region."""
+
+    print(f"\n{region_name} censoring options:")
+    print("1. Blur")
+    print("2. Pixelate")
+    print("3. Emoji")
+    print("4. Black box")
+    print("5. Custom image")
+
+    while True:
+        choice = input(f"Select {region_name} censoring method (1-5): ").strip()
+
+        if choice == "1":
+            print("\nBlur strength options (higher = more blurry):")
+            print("  15: Light blur (features still somewhat visible)")
+            print("  31: Medium blur (features heavily obscured)")
+            print("  51: Heavy blur (completely indistinguishable)")
+            print("  71: Very heavy blur (large smear)")
+            while True:
+                strength = input("Enter blur strength (15-71, default 31): ").strip()
+                if not strength:
+                    strength = "31"
+                try:
+                    strength_val = int(strength)
+                    if 3 <= strength_val <= 100:
+                        return {"type": "blur", "strength": strength_val}
+                    else:
+                        print("Strength must be between 3 and 100.")
+                except ValueError:
+                    print("Please enter a valid number.")
+        elif choice == "2":
+            print("\nPixelate strength options (higher = larger blocks):")
+            print("  10: Small blocks (some detail visible)")
+            print("  18: Medium blocks (features obscured)")
+            print("  30: Large blocks (completely pixelated)")
+            while True:
+                strength = input("Enter pixelate strength (2-100, default 18): ").strip()
+                if not strength:
+                    strength = "18"
+                try:
+                    strength_val = int(strength)
+                    if 2 <= strength_val <= 100:
+                        return {"type": "pixelate", "strength": strength_val}
+                    else:
+                        print("Strength must be between 2 and 100.")
+                except ValueError:
+                    print("Please enter a valid number.")
+        elif choice == "3":
+            emoji = input("Enter emoji (e.g., 😎, 🍑): ").strip()
+            return {"type": "emoji", "emoji": emoji}
+        elif choice == "4":
+            return "box"
+        elif choice == "5":
+            image_path = input("Enter image path: ").strip()
+            return {"type": "image", "image": image_path}
+        else:
+            print("Invalid choice. Please enter 1-5.")
+
+
+def configure_censoring(config):
+    """Ask user how they want to censor faces and private parts."""
+
+    print("\n================================")
+    print("CENSORING CONFIGURATION")
+    print("================================")
+
+    face_method = select_censoring_method("Face")
+
+    if isinstance(face_method, dict):
+        config["overlay"]["face"].update(face_method)
+    else:
+        config["overlay"]["face"]["type"] = face_method
+
+    private_method = select_censoring_method("Private parts")
+
+    if isinstance(private_method, dict):
+        config["overlay"]["private"].update(private_method)
+    else:
+        config["overlay"]["private"]["type"] = private_method
+
+    # Save configuration
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=4)
+
+    print("\nConfiguration saved.")
+    return config
+
+
 # ------------------------------------------------------------
 # FFMPEG
 # ------------------------------------------------------------
@@ -829,6 +918,11 @@ def main():
 
         print("Selected file does not exist.")
         return
+
+    use_default = input("\nUse current censoring settings from config.json? (y/n): ").strip().lower()
+
+    if use_default != 'y':
+        config = configure_censoring(config)
 
     process_video(
         video,
