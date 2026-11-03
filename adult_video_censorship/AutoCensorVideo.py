@@ -1,9 +1,10 @@
 
-import os
-import sys
+from __future__ import annotations
+
 import json
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import cv2
@@ -11,18 +12,34 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 # ============================================================
-# AUTOCENSORVIDEO - ONE VIDEO PER RUN
+# AUTOCENSORVIDEO
+# Windows | Python 3.14 | MediaPipe Tasks
+# Processes ONE selected video per execution.
 # ============================================================
 
 ROOT = Path(__file__).resolve().parent
-CONFIG_FILE = ROOT / "config.json"
+CONFIG_PATH = ROOT / "config.json"
 OUTPUT_DIR = ROOT / "output"
+MODEL_DIR = ROOT / "models"
+
+SUPPORTED_VIDEO = (
+    "*.mp4 *.mkv *.mov *.avi *.webm *.m4v *.wmv"
+)
+
+
+# ------------------------------------------------------------
+# CONFIGURATION
+# ------------------------------------------------------------
 
 DEFAULT_CONFIG = {
     "face_detection": True,
     "private_detection": True,
+
+    "face_model": "models/face_detector.tflite",
     "private_model": "models/private_regions.pt",
+
     "private_class_ids": [],
+
     "confidence": 0.35,
     "detect_every_n_frames": 2,
 
@@ -60,17 +77,38 @@ DEFAULT_CONFIG = {
 
 
 def load_config():
-    if not CONFIG_FILE.exists():
-        CONFIG_FILE.write_text(
+    """Create config.json if it does not exist."""
+
+    if not CONFIG_PATH.exists():
+        CONFIG_PATH.write_text(
             json.dumps(DEFAULT_CONFIG, indent=4),
             encoding="utf-8"
         )
 
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        config = json.load(f)
+
+    # Fill missing configuration values.
+    for key, value in DEFAULT_CONFIG.items():
+        config.setdefault(key, value)
+
+    config.setdefault("overlay", {})
+
+    for key, value in DEFAULT_CONFIG["overlay"].items():
+        config["overlay"].setdefault(key, value.copy())
+
+    config.setdefault("encoding", DEFAULT_CONFIG["encoding"].copy())
+
+    return config
 
 
-def select_video():
+# ------------------------------------------------------------
+# FILE SELECTION
+# ------------------------------------------------------------
+
+def select_video() -> Path | None:
+    """Select exactly one video using a Windows file picker."""
+
     import tkinter as tk
     from tkinter import filedialog
 
@@ -79,10 +117,10 @@ def select_video():
     root.attributes("-topmost", True)
 
     filename = filedialog.askopenfilename(
-        title="Select ONE video to censor",
+        title="AutoCensorVideo - Select ONE video",
         filetypes=[
-            ("Video Files", "*.mp4 *.mkv *.mov *.avi *.webm *.m4v"),
-            ("All Files", "*.*")
+            ("Video files", SUPPORTED_VIDEO),
+            ("All files", "*.*")
         ]
     )
 
@@ -94,109 +132,339 @@ def select_video():
     return Path(filename)
 
 
-def get_ffmpeg():
+# ------------------------------------------------------------
+# FFMPEG
+# ------------------------------------------------------------
+
+def find_ffmpeg():
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
 
-    if not ffmpeg or not ffprobe:
+    if not ffmpeg:
         raise RuntimeError(
-            "FFmpeg and FFprobe must be installed and added to PATH."
+            "FFmpeg was not found in PATH.\n"
+            "Install FFmpeg and restart PowerShell."
+        )
+
+    if not ffprobe:
+        raise RuntimeError(
+            "FFprobe was not found in PATH."
         )
 
     return ffmpeg, ffprobe
 
 
-def get_video_info(video, ffprobe):
-    result = subprocess.check_output([
+def get_video_info(video: Path, ffprobe: str):
+    """Return video width, height, FPS, and duration."""
+
+    command = [
         ffprobe,
         "-v", "error",
         "-select_streams", "v:0",
-        "-show_entries", "stream=width,height,r_frame_rate",
-        "-show_entries", "format=duration",
+        "-show_entries",
+        "stream=width,height,r_frame_rate",
+        "-show_entries",
+        "format=duration",
         "-of", "json",
         str(video)
-    ], text=True)
+    ]
+
+    result = subprocess.check_output(
+        command,
+        text=True
+    )
 
     data = json.loads(result)
-    stream = data["streams"][0]
 
-    rate = stream["r_frame_rate"].split("/")
-    fps = float(rate[0]) / float(rate[1])
+    stream = data["streams"][0]
 
     width = int(stream["width"])
     height = int(stream["height"])
-    duration = float(data["format"]["duration"])
+
+    rate = stream.get("r_frame_rate", "30/1")
+    numerator, denominator = rate.split("/")
+
+    fps = float(numerator) / float(denominator)
+
+    duration = float(
+        data.get("format", {}).get("duration", 0)
+    )
 
     return width, height, fps, duration
 
 
-def make_emoji(emoji, width, height):
-    image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+# ------------------------------------------------------------
+# MEDIAPIPE FACE DETECTOR
+# ------------------------------------------------------------
+
+def create_face_detector(config):
+    """Create the modern MediaPipe Tasks face detector."""
+
+    if not config.get("face_detection", True):
+        return None
+
+    import mediapipe as mp
+
+    model_path = ROOT / config.get(
+        "face_model",
+        "models/face_detector.tflite"
+    )
+
+    if not model_path.exists():
+        raise RuntimeError(
+            f"Face detection model missing:\n{model_path}\n\n"
+            "Download the model using the README instructions."
+        )
+
+    options = mp.tasks.vision.FaceDetectorOptions(
+        base_options=mp.tasks.BaseOptions(
+            model_asset_path=str(model_path)
+        ),
+        running_mode=mp.tasks.vision.RunningMode.VIDEO,
+        min_detection_confidence=float(
+            config.get("confidence", 0.35)
+        )
+    )
+
+    return mp.tasks.vision.FaceDetector.create_from_options(
+        options
+    )
+
+
+def detect_faces(detector, frame, timestamp_ms):
+    """Detect faces using MediaPipe Tasks."""
+
+    if detector is None:
+        return []
+
+    import mediapipe as mp
+
+    rgb = cv2.cvtColor(
+        frame,
+        cv2.COLOR_BGR2RGB
+    )
+
+    image = mp.Image(
+        image_format=mp.ImageFormat.SRGB,
+        data=rgb
+    )
+
+    result = detector.detect_for_video(
+        image,
+        timestamp_ms
+    )
+
+    boxes = []
+
+    for detection in result.detections:
+        box = detection.bounding_box
+
+        x1 = box.origin_x
+        y1 = box.origin_y
+
+        x2 = x1 + box.width
+        y2 = y1 + box.height
+
+        boxes.append(
+            (x1, y1, x2, y2)
+        )
+
+    return boxes
+
+
+# ------------------------------------------------------------
+# OPTIONAL YOLO PRIVATE-REGION DETECTOR
+# ------------------------------------------------------------
+
+def create_private_detector(config):
+    """Load an optional custom-trained YOLO model."""
+
+    if not config.get("private_detection", True):
+        return None
+
+    model_path = ROOT / config.get(
+        "private_model",
+        "models/private_regions.pt"
+    )
+
+    if not model_path.exists():
+        print(
+            "[WARNING] Private-region model not found:",
+            model_path
+        )
+        print(
+            "Private-region detection is disabled until "
+            "a compatible custom YOLO model is supplied."
+        )
+        return None
+
+    try:
+        from ultralytics import YOLO
+
+        print("[INFO] Loading private-region detector...")
+
+        return YOLO(str(model_path))
+
+    except Exception as error:
+        print("[WARNING] YOLO initialization failed:", error)
+        return None
+
+
+def detect_private_regions(
+    model,
+    frame,
+    confidence,
+    class_ids
+):
+    """Detect regions using a custom YOLO model."""
+
+    if model is None:
+        return []
+
+    results = model.predict(
+        frame,
+        conf=confidence,
+        verbose=False
+    )
+
+    boxes = []
+    allowed_classes = set(class_ids)
+
+    for result in results:
+        if result.boxes is None:
+            continue
+
+        for detection in result.boxes:
+            class_id = int(detection.cls[0])
+
+            if (
+                allowed_classes
+                and class_id not in allowed_classes
+            ):
+                continue
+
+            coordinates = detection.xyxy[0].tolist()
+
+            boxes.append(
+                tuple(map(int, coordinates))
+            )
+
+    return boxes
+
+
+# ------------------------------------------------------------
+# OVERLAY RENDERING
+# ------------------------------------------------------------
+
+def render_emoji(emoji, width, height):
+    """Render emoji to transparent RGBA image."""
+
+    image = Image.new(
+        "RGBA",
+        (max(1, width), max(1, height)),
+        (0, 0, 0, 0)
+    )
+
     draw = ImageDraw.Draw(image)
 
     try:
-        font = ImageFont.truetype("seguiemj.ttf", max(16, int(height * 0.85)))
+        font = ImageFont.truetype(
+            "seguiemj.ttf",
+            max(16, int(height * 0.9))
+        )
     except Exception:
         font = ImageFont.load_default()
 
-    draw.text((0, 0), emoji, font=font, embedded_color=True)
+    draw.text(
+        (0, 0),
+        emoji,
+        font=font,
+        embedded_color=True
+    )
+
     return image
 
 
 def apply_overlay(frame, box, settings):
-    """
-    Supported:
-      blur
-      pixelate
-      emoji
-      box
-      image
-    """
+    """Apply configured overlay to a bounding box."""
 
-    height, width = frame.shape[:2]
+    frame_height, frame_width = frame.shape[:2]
 
     x1, y1, x2, y2 = map(int, box)
 
     x1 = max(0, x1)
     y1 = max(0, y1)
-    x2 = min(width, x2)
-    y2 = min(height, y2)
+
+    x2 = min(frame_width, x2)
+    y2 = min(frame_height, y2)
 
     if x2 <= x1 or y2 <= y1:
         return
 
-    # Expand bounding box
-    padding = float(settings.get("padding", 0.15))
+    # Padding
+    padding = float(
+        settings.get("padding", 0.15)
+    )
 
     pad_x = int((x2 - x1) * padding)
     pad_y = int((y2 - y1) * padding)
 
     x1 = max(0, x1 - pad_x)
     y1 = max(0, y1 - pad_y)
-    x2 = min(width, x2 + pad_x)
-    y2 = min(height, y2 + pad_y)
 
-    # Optional scaling
-    scale = float(settings.get("scale", 1.0))
+    x2 = min(frame_width, x2 + pad_x)
+    y2 = min(frame_height, y2 + pad_y)
+
+    # Scale overlay
+    scale = max(
+        0.1,
+        float(settings.get("scale", 1.0))
+    )
 
     center_x = (x1 + x2) // 2
     center_y = (y1 + y2) // 2
 
-    box_w = max(2, int((x2 - x1) * scale))
-    box_h = max(2, int((y2 - y1) * scale))
+    box_width = max(
+        2,
+        int((x2 - x1) * scale)
+    )
 
-    x1 = max(0, center_x - box_w // 2)
-    y1 = max(0, center_y - box_h // 2)
-    x2 = min(width, x1 + box_w)
-    y2 = min(height, y1 + box_h)
+    box_height = max(
+        2,
+        int((y2 - y1) * scale)
+    )
+
+    x1 = max(0, center_x - box_width // 2)
+    y1 = max(0, center_y - box_height // 2)
+
+    x2 = min(frame_width, x1 + box_width)
+    y2 = min(frame_height, y1 + box_height)
 
     roi = frame[y1:y2, x1:x2].copy()
 
-    overlay_type = settings.get("type", "blur").lower()
-    strength = max(3, int(settings.get("strength", 31)))
-    opacity = max(0.0, min(1.0, float(settings.get("opacity", 1.0))))
+    if roi.size == 0:
+        return
 
+    overlay_type = settings.get(
+        "type", "blur"
+    ).lower()
+
+    strength = max(
+        3,
+        int(settings.get("strength", 31))
+    )
+
+    opacity = max(
+        0.0,
+        min(
+            1.0,
+            float(settings.get("opacity", 1.0))
+        )
+    )
+
+    # BLUR
     if overlay_type == "blur":
+
         if strength % 2 == 0:
             strength += 1
 
@@ -206,7 +474,9 @@ def apply_overlay(frame, box, settings):
             0
         )
 
+    # PIXELATION
     elif overlay_type == "pixelate":
+
         block = max(2, strength)
 
         small = cv2.resize(
@@ -224,24 +494,33 @@ def apply_overlay(frame, box, settings):
             interpolation=cv2.INTER_NEAREST
         )
 
+    # SOLID BOX
     elif overlay_type == "box":
+
         effect = roi.copy()
-        effect[:] = settings.get("color", [0, 0, 0])
 
+        effect[:] = settings.get(
+            "color", [0, 0, 0]
+        )
+
+    # EMOJI OR CUSTOM IMAGE
     elif overlay_type in ("emoji", "image"):
-        if overlay_type == "image" and settings.get("image"):
-            image_path = Path(settings["image"])
 
-            if image_path.exists():
-                icon = Image.open(image_path).convert("RGBA")
-            else:
-                icon = make_emoji(
-                    settings.get("emoji", "🟣"),
-                    roi.shape[1],
-                    roi.shape[0]
-                )
+        image_path = settings.get("image", "")
+
+        if (
+            overlay_type == "image"
+            and image_path
+            and Path(image_path).exists()
+        ):
+
+            icon = Image.open(
+                image_path
+            ).convert("RGBA")
+
         else:
-            icon = make_emoji(
+
+            icon = render_emoji(
                 settings.get("emoji", "🟣"),
                 roi.shape[1],
                 roi.shape[0]
@@ -253,135 +532,78 @@ def apply_overlay(frame, box, settings):
         )
 
         background = Image.fromarray(
-            cv2.cvtColor(roi, cv2.COLOR_BGR2RGB)
+            cv2.cvtColor(
+                roi,
+                cv2.COLOR_BGR2RGB
+            )
         ).convert("RGBA")
 
         background.alpha_composite(icon)
 
         effect = cv2.cvtColor(
-            np.array(background.convert("RGB")),
+            np.array(
+                background.convert("RGB")
+            ),
             cv2.COLOR_RGB2BGR
         )
 
     else:
-        effect = cv2.GaussianBlur(roi, (31, 31), 0)
 
-    if opacity < 1.0:
-        frame[y1:y2, x1:x2] = cv2.addWeighted(
-            roi, 1.0 - opacity,
-            effect, opacity,
+        effect = cv2.GaussianBlur(
+            roi,
+            (31, 31),
             0
         )
+
+    # Apply opacity
+    if opacity < 1.0:
+
+        frame[y1:y2, x1:x2] = cv2.addWeighted(
+            roi,
+            1.0 - opacity,
+            effect,
+            opacity,
+            0
+        )
+
     else:
+
         frame[y1:y2, x1:x2] = effect
 
 
-def detect_faces(detector, frame):
-    faces = []
+# ------------------------------------------------------------
+# VIDEO PROCESSING
+# ------------------------------------------------------------
 
-    if detector is None:
-        return faces
+def process_video(video, config):
+    ffmpeg, ffprobe = find_ffmpeg()
 
-    height, width = frame.shape[:2]
-
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    result = detector.process(rgb)
-
-    if result.detections:
-        for detection in result.detections:
-            box = detection.location_data.relative_bounding_box
-
-            x1 = int(box.xmin * width)
-            y1 = int(box.ymin * height)
-            x2 = x1 + int(box.width * width)
-            y2 = y1 + int(box.height * height)
-
-            faces.append((x1, y1, x2, y2))
-
-    return faces
-
-
-def detect_private_regions(model, frame, confidence, class_ids):
-    regions = []
-
-    if model is None:
-        return regions
-
-    results = model.predict(
-        frame,
-        conf=confidence,
-        verbose=False
+    width, height, fps, duration = get_video_info(
+        video,
+        ffprobe
     )
 
-    allowed = set(class_ids)
+    OUTPUT_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-    for result in results:
-        if result.boxes is None:
-            continue
+    output = OUTPUT_DIR / (
+        video.stem + "_censored.mp4"
+    )
 
-        for box in result.boxes:
-            class_id = int(box.cls[0])
+    temporary = OUTPUT_DIR / (
+        video.stem + "_processed_temp.mp4"
+    )
 
-            if allowed and class_id not in allowed:
-                continue
+    capture = cv2.VideoCapture(
+        str(video)
+    )
 
-            coords = box.xyxy[0].tolist()
-            regions.append(tuple(map(int, coords)))
-
-    return regions
-
-
-def main():
-    config = load_config()
-
-    video = select_video()
-
-    if video is None:
-        print("No video selected.")
-        return
-
-    if not video.is_file():
-        print("Invalid video.")
-        return
-
-    ffmpeg, ffprobe = get_ffmpeg()
-
-    import mediapipe as mp
-
-    face_detector = None
-
-    if config.get("face_detection", True):
-        face_detector = mp.solutions.face_detection.FaceDetection(
-            model_selection=1,
-            min_detection_confidence=config.get("confidence", 0.35)
+    if not capture.isOpened():
+        raise RuntimeError(
+            "Could not open selected video."
         )
-
-    private_model = None
-
-    if config.get("private_detection", True):
-        model_path = ROOT / config.get(
-            "private_model",
-            "models/private_regions.pt"
-        )
-
-        if model_path.exists():
-            try:
-                from ultralytics import YOLO
-                private_model = YOLO(str(model_path))
-            except Exception as error:
-                print("Could not load private detector:", error)
-        else:
-            print("Private-region model not installed.")
-            print("Private-region detection will be skipped.")
-
-    width, height, fps, duration = get_video_info(video, ffprobe)
-
-    OUTPUT_DIR.mkdir(exist_ok=True)
-
-    output = OUTPUT_DIR / f"{video.stem}_censored.mp4"
-    temporary = OUTPUT_DIR / f"{video.stem}_temporary.mp4"
-
-    capture = cv2.VideoCapture(str(video))
 
     writer = cv2.VideoWriter(
         str(temporary),
@@ -390,107 +612,222 @@ def main():
         (width, height)
     )
 
-    face_boxes = []
-    private_boxes = []
+    if not writer.isOpened():
+        capture.release()
 
-    interval = max(
-        1,
-        int(config.get("detect_every_n_frames", 2))
-    )
+        raise RuntimeError(
+            "Could not create temporary video."
+        )
 
-    frame_number = 0
-
-    print()
-    print("AUTOCENSORVIDEO")
-    print("============================")
-    print("Input :", video)
-    print("Output:", output)
-    print("Duration:", round(duration, 2), "seconds")
-    print("Processing ONE video...")
-    print()
+    face_detector = None
+    private_detector = None
 
     try:
+
+        face_detector = create_face_detector(
+            config
+        )
+
+        private_detector = create_private_detector(
+            config
+        )
+
+        face_boxes = []
+        private_boxes = []
+
+        detection_interval = max(
+            1,
+            int(
+                config.get(
+                    "detect_every_n_frames", 2
+                )
+            )
+        )
+
+        frame_number = 0
+
+        print()
+        print("================================")
+        print("AUTOCENSORVIDEO")
+        print("================================")
+        print("Input:", video)
+        print("Output:", output)
+        print("Resolution:", width, "x", height)
+        print("FPS:", round(fps, 2))
+        print("Duration:", round(duration, 2))
+        print("--------------------------------")
+
         while True:
+
             success, frame = capture.read()
 
             if not success:
                 break
 
-            if frame_number % interval == 0:
+            timestamp_ms = int(
+                frame_number * 1000 / fps
+            )
+
+            # Run detectors periodically
+            if frame_number % detection_interval == 0:
+
                 face_boxes = detect_faces(
                     face_detector,
-                    frame
+                    frame,
+                    timestamp_ms
                 )
 
                 private_boxes = detect_private_regions(
-                    private_model,
+                    private_detector,
                     frame,
                     config.get("confidence", 0.35),
                     config.get("private_class_ids", [])
                 )
 
+            # Face overlays
+            face_settings = config["overlay"]["face"]
+
             for box in face_boxes:
+
                 apply_overlay(
                     frame,
                     box,
-                    config["overlay"]["face"]
+                    face_settings
                 )
 
+            # Private-region overlays
+            private_settings = config["overlay"]["private"]
+
             for box in private_boxes:
+
                 apply_overlay(
                     frame,
                     box,
-                    config["overlay"]["private"]
+                    private_settings
                 )
 
             writer.write(frame)
+
             frame_number += 1
 
-            if frame_number % int(fps * 10) == 0:
+            if frame_number % max(
+                1, int(fps * 10)
+            ) == 0:
+
                 print(
-                    f"Processed {frame_number / fps:.0f}"
-                    f" / {duration:.0f} seconds"
+                    f"Processed "
+                    f"{frame_number / fps:.0f} / "
+                    f"{duration:.0f} seconds"
                 )
 
     finally:
+
         capture.release()
         writer.release()
 
         if face_detector:
             face_detector.close()
 
+    # --------------------------------------------------------
+    # FINAL ENCODING + ORIGINAL AUDIO
+    # --------------------------------------------------------
+
+    encoding = config.get(
+        "encoding", {}
+    )
+
     print()
-    print("Encoding final video...")
+    print("Encoding final MP4...")
 
-    encoding = config.get("encoding", {})
-
-    subprocess.run([
+    command = [
         ffmpeg,
         "-y",
+
         "-i", str(temporary),
         "-i", str(video),
+
         "-map", "0:v:0",
         "-map", "1:a?",
-        "-c:v", encoding.get("codec", "libx264"),
-        "-crf", str(encoding.get("crf", 20)),
-        "-preset", encoding.get("preset", "medium"),
-        "-c:a", encoding.get("audio", "copy"),
+
+        "-c:v", encoding.get(
+            "codec", "libx264"
+        ),
+
+        "-crf", str(
+            encoding.get("crf", 20)
+        ),
+
+        "-preset", encoding.get(
+            "preset", "medium"
+        ),
+
+        "-c:a", encoding.get(
+            "audio", "copy"
+        ),
+
         "-shortest",
         str(output)
-    ], check=True)
+    ]
 
-    temporary.unlink(missing_ok=True)
+    subprocess.run(
+        command,
+        check=True
+    )
+
+    temporary.unlink(
+        missing_ok=True
+    )
 
     print()
-    print("COMPLETE")
+    print("================================")
+    print("PROCESSING COMPLETE")
+    print("================================")
     print("Saved:", output)
 
 
+# ------------------------------------------------------------
+# MAIN
+# ------------------------------------------------------------
+
+def main():
+
+    print("AutoCensorVideo starting...")
+
+    config = load_config()
+
+    video = select_video()
+
+    if video is None:
+
+        print("No video selected.")
+        return
+
+    if not video.exists():
+
+        print("Selected file does not exist.")
+        return
+
+    process_video(
+        video,
+        config
+    )
+
+
+# ------------------------------------------------------------
+# ENTRY POINT
+# ------------------------------------------------------------
+
 if __name__ == "__main__":
+
     try:
+
         main()
+
     except KeyboardInterrupt:
-        print("\nCancelled.")
+
+        print("\nProcessing cancelled.")
+
     except Exception as error:
+
         print("\nERROR:", error)
         sys.exit(1)

@@ -2,8 +2,12 @@
 {
     "face_detection": true,
     "private_detection": true,
+
+    "face_model": "models/face_detector.tflite",
     "private_model": "models/private_regions.pt",
+
     "private_class_ids": [],
+
     "confidence": 0.35,
     "detect_every_n_frames": 2,
 
