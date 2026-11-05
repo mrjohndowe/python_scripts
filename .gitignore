@@ -219,3 +219,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 adult_video_censorship/output/*
+dowe_email_signature_outlook.html
+dowe_email_signature.html
+dowe_email_templates.txt
